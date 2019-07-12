@@ -12,10 +12,7 @@
 
 #include <benchmark/benchmark.h>
 
-struct LargeThing {
-  LargeThing() : payload{0} {}
-  int payload[1024];
-};
+using LargeThing = std::array<int, 1024>;
 
 template <typename SeqContainer>
 void BM_InsertFront( benchmark::State &state ) {
@@ -123,7 +120,11 @@ void BM_AccessForward( benchmark::State &state ) {
   std::fill_n( std::back_inserter( container ), state.range( 0 ), value );
   for ( auto _ : state ) {
     for ( auto &accessed : container ) {
-      benchmark::DoNotOptimize( accessed );
+      if constexpr (std::is_same_v<typename SeqContainer::value_type, int>) {
+        benchmark::DoNotOptimize( accessed ^ accessed );
+      } else {
+        benchmark::DoNotOptimize( accessed );
+      }
     }
   }
   state.SetItemsProcessed( static_cast<int64_t>( state.iterations() ) * state.range( 0 ) );
