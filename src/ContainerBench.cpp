@@ -1,18 +1,34 @@
 
 #include <iostream>
-#include <iomanip>
 #include <algorithm>
 #include <iterator>
 #include <vector>
-#include <utility>
 #include <list>
 #include <forward_list>
 #include <deque>
-#include <cstring>
 
 #include <benchmark/benchmark.h>
 
 using LargeThing = std::array<int, 1024>;
+
+struct Untimed {
+  Untimed( benchmark::State &state ) : m_state{state} { m_state.PauseTiming(); }
+  ~Untimed() noexcept { m_state.ResumeTiming(); }
+  benchmark::State &m_state;
+};
+
+static void reportCounters( benchmark::State &state, size_t bytes_per_item ) {
+  state.SetItemsProcessed( static_cast<int64_t>( state.iterations() ) * state.range( 0 ) );
+  state.SetBytesProcessed( static_cast<int64_t>( state.iterations() ) * state.range( 0 ) * bytes_per_item );
+  state.counters["size"] = state.range( 0 );
+}
+
+static const std::vector<std::pair<int64_t, int64_t>> g_default_ranges {
+  {1 << 0, 10 << 10},
+  {10 << 10, 10 << 10}
+};
+
+/* ---- Insertion Benchmarks ---- */
 
 template <typename SeqContainer>
 void BM_InsertFront( benchmark::State &state ) {
@@ -21,9 +37,7 @@ void BM_InsertFront( benchmark::State &state ) {
     SeqContainer container;
     std::fill_n( std::inserter( container, container.begin() ), state.range( 0 ), value );
   }
-  state.SetItemsProcessed( static_cast<int64_t>( state.iterations() ) * state.range( 0 ) );
-  state.SetBytesProcessed( static_cast<int64_t>( state.iterations() ) * state.range( 0 ) * sizeof(value) );
-  state.counters["size"] = state.range( 0 );
+  reportCounters( state, sizeof(value) );
 }
 
 template <typename SeqContainer>
@@ -33,9 +47,7 @@ void BM_InsertBack( benchmark::State &state ) {
     SeqContainer container;
     std::fill_n( std::back_inserter( container ), state.range( 0 ), value );
   }
-  state.SetItemsProcessed( static_cast<int64_t>( state.iterations() ) * state.range( 0 ) );
-  state.SetBytesProcessed( static_cast<int64_t>( state.iterations() ) * state.range( 0 ) * sizeof( value ) );
-  state.counters["size"] = state.range( 0 );
+  reportCounters( state, sizeof( value ) );
 }
 
 template <typename SeqContainer>
@@ -50,10 +62,10 @@ void BM_InsertMiddle( benchmark::State &state ) {
     state.ResumeTiming();
     std::fill_n( std::inserter( container, iter ), state.range( 0 ), value );
   }
-  state.SetItemsProcessed( static_cast<int64_t>( state.iterations() ) * state.range( 0 ) );
-  state.SetBytesProcessed( static_cast<int64_t>( state.iterations() ) * state.range( 0 ) * sizeof( value ) );
-  state.counters["size"] = state.range( 0 );
+  reportCounters( state, sizeof( value ) );
 }
+
+/* ---- Removal Benchmarks ---- */
 
 template <typename SeqContainer>
 void BM_RemoveFront( benchmark::State &state ) {
@@ -67,9 +79,7 @@ void BM_RemoveFront( benchmark::State &state ) {
       container.erase( container.begin() );
     }
   }
-  state.SetItemsProcessed( static_cast<int64_t>( state.iterations() ) * state.range( 0 ) );
-  state.SetBytesProcessed( static_cast<int64_t>( state.iterations() ) * state.range( 0 ) * sizeof( value ) );
-  state.counters["size"] = state.range( 0 );
+  reportCounters( state, sizeof( value ) );
 }
 
 template <typename SeqContainer>
@@ -84,9 +94,7 @@ void BM_RemoveBack( benchmark::State &state ) {
       container.pop_back();
     }
   }
-  state.SetItemsProcessed( static_cast<int64_t>( state.iterations() ) * state.range( 0 ) );
-  state.SetBytesProcessed( static_cast<int64_t>( state.iterations() ) * state.range( 0 ) * sizeof( value ) );
-  state.counters["size"] = state.range( 0 );
+  reportCounters( state, sizeof( value ) );
 }
 
 template <typename SeqContainer>
@@ -107,11 +115,11 @@ void BM_RemoveMiddle( benchmark::State &state ) {
     }
   }
   if ( state.range( 1 ) >= state.range( 0 ) ) {
-    state.SetItemsProcessed( static_cast<int64_t>( state.iterations() ) * state.range( 0 ) );
-    state.SetBytesProcessed( static_cast<int64_t>( state.iterations() ) * state.range( 0 ) * sizeof( value ) );
-    state.counters["size"] = state.range( 0 );
+    reportCounters( state, sizeof( value ) );
   }
 }
+
+/* ---- Insertion Benchmarks ---- */
 
 template <typename SeqContainer>
 void BM_AccessForward( benchmark::State &state ) {
@@ -127,9 +135,7 @@ void BM_AccessForward( benchmark::State &state ) {
       }
     }
   }
-  state.SetItemsProcessed( static_cast<int64_t>( state.iterations() ) * state.range( 0 ) );
-  state.SetBytesProcessed( static_cast<int64_t>( state.iterations() ) * state.range( 0 ) * sizeof( value ) );
-  state.counters["size"] = state.range( 0 );
+  reportCounters( state, sizeof( value ) );
 }
 
 template <typename SeqContainer>
@@ -142,9 +148,7 @@ void BM_AccessBackward( benchmark::State &state ) {
       benchmark::DoNotOptimize( *iter );
     }
   }
-  state.SetItemsProcessed( static_cast<int64_t>( state.iterations() ) * state.range( 0 ) );
-  state.SetBytesProcessed( static_cast<int64_t>( state.iterations() ) * state.range( 0 ) * sizeof( value ) );
-  state.counters["size"] = state.range( 0 );
+  reportCounters( state, sizeof( value ) );
 }
 
 template <typename SeqContainer>
@@ -164,15 +168,8 @@ void BM_AccessRandom( benchmark::State &state ) {
       benchmark::DoNotOptimize( *iter );
     }
   }
-  state.SetItemsProcessed( static_cast<int64_t>( state.iterations() ) * state.range( 0 ) );
-  state.SetBytesProcessed( static_cast<int64_t>( state.iterations() ) * state.range( 0 ) * sizeof( value ) );
-  state.counters["size"] = state.range( 0 );
+  reportCounters( state, sizeof( value ) );
 }
-
-static std::vector<std::pair<int64_t, int64_t>> g_default_ranges {
-  {1 << 0, 10 << 10},
-  {10 << 10, 10 << 10}
-};
 
 BENCHMARK_TEMPLATE( BM_InsertFront, std::vector<int> )->Ranges( g_default_ranges );
 BENCHMARK_TEMPLATE( BM_InsertFront, std::list<int> )->Ranges( g_default_ranges );
@@ -237,49 +234,4 @@ BENCHMARK_TEMPLATE( BM_AccessRandom, std::vector<LargeThing> )->Ranges( g_defaul
 BENCHMARK_TEMPLATE( BM_AccessRandom, std::list<LargeThing> )->Ranges( g_default_ranges );
 BENCHMARK_TEMPLATE( BM_AccessRandom, std::deque<LargeThing> )->Ranges( g_default_ranges );
 
-int main( int argc, char **argv ) {
-  benchmark::Initialize( &argc, argv );
-  bool use_simplified = false;
-  for ( int arg_i = 1; arg_i < argc; arg_i++ ) {
-    if ( std::strcmp( argv[arg_i], "--simplified" ) == 0 ) {
-      use_simplified = true;
-    }
-  }
-  struct SimplifiedReporter : public benchmark::BenchmarkReporter {
-    SimplifiedReporter() : BenchmarkReporter() {}
-    bool ReportContext( const Context &context ) override {
-      m_name_field_width = context.name_field_width;
-      PrintBasicContext( &GetOutputStream(), context );
-      return true;
-    }
-    void ReportRun( const Run &result ) {
-      auto &os = GetOutputStream();
-
-      os << std::left << std::setw( m_name_field_width ) << result.benchmark_name() << " ";
-
-      if ( result.error_occurred ) {
-        os << "ERROR OCCURRED: '" << result.error_message << "'\n";
-        return;
-      }
-
-      const double cpu_time = result.GetAdjustedCPUTime();
-      for ( const auto &counter : result.counters ) {
-        os << std::right << std::fixed << std::setprecision( 0 ) << std::setw( 12 ) << counter.second.value
-           << counter.first.front() << ( counter.second.kIsRate ? "/s " : "   " );
-      }
-      os << "\n";
-    }
-    void ReportRuns( const std::vector<Run> &report ) override {
-      for ( const auto &result : report ) {
-        ReportRun( result );
-      }
-    }
-    size_t m_name_field_width;
-  };
-  if ( use_simplified ) {
-    SimplifiedReporter reporter;
-    benchmark::RunSpecifiedBenchmarks( &reporter );
-  } else {
-    benchmark::RunSpecifiedBenchmarks();
-  }
-}
+BENCHMARK_MAIN();
